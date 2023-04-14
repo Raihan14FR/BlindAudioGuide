@@ -1,0 +1,121 @@
+#include <BLEDevice.h>
+#include <BLEUtils.h>
+#include <BLEScan.h>
+#include <BLEAdvertisedDevice.h>
+#include <SoftwareSerial.h>
+#include <DFPlayer_Mini_Mp3.h>
+
+SoftwareSerial serialmp3(15, 14);  // RX, TX
+
+int ledA = 13;
+int ledB = 12;
+int pbReset = 2;
+
+static BLEUUID serviceUUID_A("7cddf5af-453f-40fa-808e-37ae6ad8facd");
+static BLEUUID serviceUUID_B("69e2c127-7db7-469c-8852-b0a542e15623");
+
+static BLEAdvertisedDevice* Scan_A;
+static BLEAdvertisedDevice* Scan_B;
+
+static bool Found_A = false;
+static bool Found_B = false;
+
+int rssi_a;
+int rssi_b;
+int stateRssiA = 0;
+int stateRssiB = 0;
+
+int scanTime = 1; //In seconds
+BLEScan* pBLEScan;
+
+class MyAdvertisedDeviceCallbacks: public BLEAdvertisedDeviceCallbacks {
+    void onResult(BLEAdvertisedDevice advertisedDevice) {
+
+      if (advertisedDevice.getName() == "ESP32-BLE-Server1"){
+        rssi_a = advertisedDevice.getRSSI();
+//        Serial.print("RSSI A: ");
+//        Serial.println(rssi_a);
+//        delay(200);
+//        Serial.printf("Name: %s // Address: %s // RSSI A: %d \n\n", advertisedDevice.getName(), 
+//        advertisedDevice.getAddress().toString().c_str(), rssi_a);
+      }
+
+      if (advertisedDevice.getName() == "ESP32-BLE-Server2"){
+        rssi_b = advertisedDevice.getRSSI();
+//        Serial.print("RSSI B: ");
+//        Serial.println(rssi_b);
+//        delay(200);
+//        Serial.printf("Name: %s // Address: %s // RSSI B: %d \n\n", advertisedDevice.getName(), 
+//        advertisedDevice.getAddress().toString().c_str(), rssi_b);
+      }
+    }
+};
+
+
+void setup() {
+  Serial.begin(115200);
+  serialmp3.begin(9600);
+  mp3_set_serial(serialmp3);
+  delay(1);
+  mp3_set_volume(20);
+  Serial.println("Scanning...");
+
+  pinMode(ledA, OUTPUT);
+  pinMode(ledB, OUTPUT);
+  pinMode(pbReset, INPUT);
+
+  digitalWrite(ledA, LOW);
+  digitalWrite(ledB, LOW);
+  digitalWrite(pbReset, HIGH);
+
+  BLEDevice::init("");
+  pBLEScan = BLEDevice::getScan(); //create new scan
+  pBLEScan->setAdvertisedDeviceCallbacks(new MyAdvertisedDeviceCallbacks());
+  pBLEScan->setActiveScan(true); //active scan uses more power, but get results faster
+  BLEScanResults foundDevices = pBLEScan->start(scanTime);
+  Serial.print("Devices found: ");
+  Serial.println(foundDevices.getCount());
+  Serial.println("Scan done!");
+}
+
+void loop() {
+  BLEScanResults foundDevices = pBLEScan->start(scanTime, false);
+//  Serial.print("Devices found: ");
+//  Serial.println(foundDevices.getCount());
+//  Serial.println("Scan done!");
+  pBLEScan->clearResults();   // delete results fromBLEScan buffer to release memory
+
+  Serial.print("RSSI A: ");
+  Serial.print(rssi_a);
+  Serial.print("  RSSI B: ");
+  Serial.print(rssi_b);
+  Serial.print("  state A: ");
+  Serial.print(stateRssiA);
+  Serial.print("  state B: ");
+  Serial.print(stateRssiB);
+  Serial.println();
+
+  if (rssi_a > -60 && stateRssiA == 0) {
+    digitalWrite(ledA, HIGH);
+    mp3_play(1);
+    delay(3000);
+    stateRssiA = 1;
+  }
+  if (rssi_b > -60 && stateRssiB == 0) {
+    digitalWrite(ledB, HIGH);
+    mp3_play(2);
+    delay(3000);
+    stateRssiB = 1;
+  }
+  if (digitalRead(pbReset) == LOW && stateRssiA == 1) {
+    digitalWrite(ledA, LOW);
+    stateRssiA = 0;
+  }
+  
+  if (digitalRead(pbReset) == LOW && stateRssiB == 1) {
+    digitalWrite(ledB, LOW);
+    stateRssiB = 0;
+  }
+      
+//  delay(2000);
+}
